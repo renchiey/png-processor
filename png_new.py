@@ -94,12 +94,16 @@ class PNG:
             raise ValueError('Decompression failed')
         
         # process image data
+        diff = self.width * 3
         
+        recon = b''
         ptr = 0
         for row in range(self.height):
             filter_type = img_data[ptr]
             ptr += 1
 
+            #recon += int.to_bytes(filter_type, 'big')
+            recon += filter_type
             self.img.append([])
             for col in range(self.width):
                 r, g, b = img_data[ptr], img_data[ptr+1], img_data[ptr+2]
@@ -107,61 +111,64 @@ class PNG:
                 match filter_type:
                     case 1:
                         if col > 0:
-                            r += img_data[ptr-3]
-                            g += img_data[ptr-2]
-                            b += img_data[ptr-1]
+                            r += recon[ptr-3]
+                            g += recon[ptr-2]
+                            b += recon[ptr-1]
                     case 2:
                         if row > 0:
-                            diff = self.width * 3
-                            r += img_data[ptr-1-diff]
-                            g += img_data[ptr-diff]
-                            b += img_data[ptr-diff+1]
+                            r += recon[ptr-1-diff]
+                            g += recon[ptr-diff]
+                            b += recon[ptr-diff+1]
                     case 3:
                         if row > 0 and col > 0:
-                            r = r + math.floor((img_data[ptr-3] + img_data[ptr-1-diff]) // 2)
-                            g = g + math.floor((img_data[ptr-2] + img_data[ptr-diff]) // 2)
-                            b = b + math.floor((img_data[ptr-1] + img_data[ptr-diff+1]) // 2)
+                            r = r + math.floor((recon[ptr-3] + recon[ptr-1-diff]) // 2)
+                            g = g + math.floor((recon[ptr-2] + recon[ptr-diff]) // 2)
+                            b = b + math.floor((recon[ptr-1] + recon[ptr-diff+1]) // 2)
                         elif row > 0:
-                            r = r + math.floor(img_data[ptr-1-diff] // 2)
-                            g = g + math.floor(img_data[ptr-diff] // 2)
-                            b = b + math.floor(img_data[ptr-diff+1] // 2)
+                            r = r + math.floor(recon[ptr-1-diff] // 2)
+                            g = g + math.floor(recon[ptr-diff] // 2)
+                            b = b + math.floor(recon[ptr-diff+1] // 2)
                         elif col > 0:
-                            r = r + math.floor(img_data[ptr-3] // 2)
-                            g = g + math.floor(img_data[ptr-2] // 2)
-                            b = b + math.floor(img_data[ptr-1] // 2)
+                            r = r + math.floor(recon[ptr-3] // 2)
+                            g = g + math.floor(recon[ptr-2] // 2)
+                            b = b + math.floor(recon[ptr-1] // 2)
                     case 4:
-                        # p = a + b - c
-                        # pa = abs(p - a)
-                        # pb = abs(p - b)
-                        # pc = abs(p - c)
-                        # if pa <= pb and pa <= pc then Pr = a
-                        # else if pb <= pc then Pr = b
-                        # else Pr = c
-                        pass
+                        rgb = [r, g, b]
+                        for i in range(3):
+                            p = 0 
+                            if row > 0 and col > 0: # c
+                                p -= recon[ptr-2-diff+i]
+                            if row > 0: # b
+                                p += recon[ptr-1-diff+i]
+                            if col > 0: # a
+                                p += recon[ptr-3+i]
+                            
+                            pa = abs(p - recon[ptr-3+i])
+                            pb = abs(p - recon[ptr-1-diff+i])
+                            pc = abs(p - recon[ptr-2-diff+i])
+                            
+                            if pa <= pb and pa <= pc:
+                                rgb[i] += recon[ptr-3+i]
+                            elif pb <= pc:
+                                rgb[i] += recon[ptr-1-diff+i]
+                            else:
+                                rgb[i] += recon[ptr-2-diff+i]
+                        
+                        r, g, b = rgb[0], rgb[1], rgb[2]
 
-                img_data[ptr], img_data[ptr+1], img_data[ptr+2] = r, g, b
+                recon += int.to_bytes(r, 'big') + int.to_bytes(g, 'big') + int.to_bytes(b, 'big')
                 self.img[row].append([r, g, b])
 
                 ptr += 3
-                     
-
-
-
-    def process_image_data(self, img_data):
-        pass
+        print("height:", len(self.img), "width:", len(self.img[0]))
 
     def save_rgb(self, file_name, rgb_option):
         pass
 
 
 if __name__ == "__main__":
-   #f = sys.argv[1]
-   #obj = PNG()
-   #obj.load_file(f)
-   #obj.read_header()
-   #obj.read_chunks()
-   #obj.save_rgb('new_png.png', 1)
-
-    with open("test.txt", 'rb') as f:
-        data = f.read()
-        print(len(data))
+   f = sys.argv[1]
+   obj = PNG()
+   obj.load_file(f)
+   obj.read_header()
+   obj.read_chunks()
